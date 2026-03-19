@@ -4,6 +4,11 @@ import edu.wpi.first.math.util.Units;
 
 public final class Constants {
 
+    public static final class VisionConstants {
+        // Limelight name (as configured in the Limelight web interface)
+        public static final String LIMELIGHT_NAME = "limelight";
+    }
+
     public static final class SwerveConstants {
         // Maximum speed of the robot in meters per second
         public static final double MAX_SPEED = Units.feetToMeters(14.5);
