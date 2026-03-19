@@ -6,11 +6,14 @@ import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
+import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Filesystem;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.Constants.SwerveConstants;
+import frc.robot.Constants.VisionConstants;
+import frc.robot.LimelightHelpers;
 import swervelib.SwerveDrive;
 import swervelib.parser.SwerveParser;
 
@@ -28,6 +31,17 @@ public class SwerveSubsystem extends SubsystemBase {
         // Configure heading correction
         swerveDrive.setHeadingCorrection(true);
         swerveDrive.setCosineCompensator(false);
+
+        // Configure Limelight camera pose relative to robot
+        LimelightHelpers.setCameraPose_RobotSpace(
+            VisionConstants.LIMELIGHT_NAME,
+            VisionConstants.CAMERA_FORWARD,
+            VisionConstants.CAMERA_SIDE,
+            VisionConstants.CAMERA_UP,
+            VisionConstants.CAMERA_ROLL,
+            VisionConstants.CAMERA_PITCH,
+            VisionConstants.CAMERA_YAW
+        );
     }
 
     /**
@@ -152,10 +166,81 @@ public class SwerveSubsystem extends SubsystemBase {
         // Update odometry
         swerveDrive.updateOdometry();
 
+        // Update vision-based odometry
+        updateVisionOdometry();
+
         // Publish telemetry data
         Pose2d pose = getPose();
         SmartDashboard.putNumber("Robot X", pose.getX());
         SmartDashboard.putNumber("Robot Y", pose.getY());
         SmartDashboard.putNumber("Robot Heading", pose.getRotation().getDegrees());
+    }
+
+    /**
+     * Update odometry using Limelight AprilTag vision measurements.
+     * Uses MegaTag2 for more accurate pose estimation.
+     */
+    private void updateVisionOdometry() {
+        // Set robot orientation for MegaTag2 algorithm
+        LimelightHelpers.SetRobotOrientation(
+            VisionConstants.LIMELIGHT_NAME,
+            getHeading().getDegrees(),
+            0, // yaw rate (not needed)
+            0, // pitch
+            0, // pitch rate
+            0, // roll
+            0  // roll rate
+        );
+
+        // Get pose estimate based on alliance
+        LimelightHelpers.PoseEstimate poseEstimate;
+        var alliance = DriverStation.getAlliance();
+        if (alliance.isPresent() && alliance.get() == DriverStation.Alliance.Red) {
+            poseEstimate = LimelightHelpers.getBotPoseEstimate_wpiRed_MegaTag2(VisionConstants.LIMELIGHT_NAME);
+        } else {
+            poseEstimate = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2(VisionConstants.LIMELIGHT_NAME);
+        }
+
+        // Validate and add vision measurement
+        if (isValidVisionMeasurement(poseEstimate)) {
+            swerveDrive.addVisionMeasurement(
+                poseEstimate.pose,
+                poseEstimate.timestampSeconds
+            );
+
+            SmartDashboard.putNumber("Vision Tag Count", poseEstimate.tagCount);
+            SmartDashboard.putNumber("Vision Avg Distance", poseEstimate.avgTagDist);
+        }
+    }
+
+    /**
+     * Check if a vision pose estimate is valid and should be used.
+     */
+    private boolean isValidVisionMeasurement(LimelightHelpers.PoseEstimate estimate) {
+        if (estimate == null || estimate.tagCount < VisionConstants.MIN_TAG_COUNT) {
+            return false;
+        }
+
+        // Check if any tags have high ambiguity
+        if (estimate.rawFiducials != null) {
+            for (var fiducial : estimate.rawFiducials) {
+                if (fiducial.ambiguity > VisionConstants.MAX_AMBIGUITY) {
+                    return false;
+                }
+            }
+        }
+
+        // Check if average distance is within acceptable range
+        if (estimate.avgTagDist > VisionConstants.MAX_VISION_DISTANCE) {
+            return false;
+        }
+
+        // Check for reasonable pose (not at origin, not wildly off-field)
+        Pose2d pose = estimate.pose;
+        if (pose.getX() < -1 || pose.getX() > 17 || pose.getY() < -1 || pose.getY() > 9) {
+            return false;
+        }
+
+        return true;
     }
 }
