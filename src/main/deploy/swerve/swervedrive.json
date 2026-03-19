@@ -1,0 +1,25 @@
+{
+  "conversionFactors": {
+    "angle": {
+      "gearRatio": 12.8,
+      "factor": 0
+    },
+    "drive": {
+      "gearRatio": 6.75,
+      "diameter": 4,
+      "factor": 0
+    }
+  },
+  "imu": {
+    "type": "navx_mxp",
+    "id": 0,
+    "canbus": null
+  },
+  "invertedIMU": false,
+  "modules": [
+    "modules/frontleft.json",
+    "modules/frontright.json",
+    "modules/backleft.json",
+    "modules/backright.json"
+  ]
+}
