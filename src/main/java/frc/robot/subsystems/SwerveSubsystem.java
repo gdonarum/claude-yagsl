@@ -94,7 +94,6 @@ public class SwerveSubsystem extends SubsystemBase {
 
     @Override
     public void periodic() {
-        swerveDrive.updateOdometry();
         updateVisionOdometry();
 
         Pose2d pose = getPose();
